@@ -116,7 +116,7 @@ function Save-WebFile {
         elseif (([System.Net.WebRequest]::DefaultWebProxy).Address) {
             $UseWebClient = $true
         }
-        elseif (!(Test-CommandCurlExe)) {
+        elseif (!(Get-Command 'curl.exe' -ErrorAction SilentlyContinue)) {
             $UseWebClient = $true
         }
 
