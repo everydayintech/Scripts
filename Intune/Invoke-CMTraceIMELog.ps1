@@ -5,6 +5,8 @@ Opens IntuneManagementExtension.log with CMTrace.exe
 Downloads CMTrace.exe to temp directory and opens IntuneManagementExtension.log
 .LINK
 https://everydayintech.com
+.EXAMPLE
+irm imelog.everydayin.tech | iex
 #>
 
 #=================================================
