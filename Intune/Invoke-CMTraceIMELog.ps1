@@ -166,7 +166,7 @@ function Invoke-CMTraceFileOpen {
 function Save-CMTraceExe {
     [CmdletBinding()]
     param (
-        [Parameter()][string]$CMTraceURL = ""
+        [Parameter()][string]$CMTraceURL = "https://raw.githubusercontent.com/everydayintech/Scripts/main/bin/cmtrace.exe"
     )
     
     $tempDir = (Get-Item $env:TEMP).FullName
