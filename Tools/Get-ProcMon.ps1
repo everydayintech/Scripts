@@ -183,4 +183,4 @@ function Set-ProcMonEulaAccepted {
 Set-ProcMonEulaAccepted
 $ProcMon = Save-ProcMonExe
 
-& "$ProcMon"
+Invoke-Expression "& $ProcMon"

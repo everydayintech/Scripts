@@ -182,4 +182,4 @@ function Set-ProcExpEulaAccepted {
 Set-ProcExpEulaAccepted
 $ProcExp = Save-ProcExpExe
 
-& "$ProcExp"
+Invoke-Expression "& $ProcExp"
