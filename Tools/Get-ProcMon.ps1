@@ -170,6 +170,7 @@ function Save-ProcMonExe {
     Expand-Archive -Path $Zip.FullName -DestinationPath $ExtractDir -Force
 
     return (Join-Path $ExtractDir 'Procmon64.exe')
+}
 
 function Set-ProcMonEulaAccepted {
     reg add "HKCU\SOFTWARE\Sysinternals\Process Monitor" /v EulaAccepted /t REG_DWORD /d 1 /f | Out-Null
