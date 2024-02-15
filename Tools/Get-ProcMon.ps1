@@ -158,18 +158,18 @@ function Save-ProcMonExe {
         [Parameter()][string]$DownloadUrl = "https://download.sysinternals.com/files/ProcessMonitor.zip"
     )
     
-    $tempDir = (Get-Item $env:TEMP).FullName
+    $TempDir = (Get-Item $env:TEMP).FullName
+    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $TempDir -DestinationName 'ProcessMonitor.zip' -Overwrite
 
-    $ExtractDir = Join-Path $tempDir 'ProcessMonitor'
-    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $tempDir -DestinationName 'ProcessMonitor.zip' -Overwrite
+    $ExtractDir = Join-Path $TempDir 'ProcessMonitor'
 
-    if(-NOT (Test-Path $ExtractDir)){
+    if (-NOT (Test-Path $ExtractDir)) {
         New-Item -Path $ExtractDir -ItemType Directory
     }
 
-    Expand-Archive -Path $Zip -DestinationPath $ExtractDir -Force
+    Expand-Archive -Path $Zip.FullName -DestinationPath $ExtractDir -Force
 
-    return (Join-Path $ExtractDir 'Procmon64.exe')
+    return (Get-Item -Path (Join-Path $ExtractDir 'Procmon64.exe')).FullName
 }
 
 function Set-ProcMonEulaAccepted {
@@ -183,4 +183,4 @@ function Set-ProcMonEulaAccepted {
 Set-ProcMonEulaAccepted
 $ProcMon = Save-ProcMonExe
 
-& $ProcMon
+& "$ProcMon"

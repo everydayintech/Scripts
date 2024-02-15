@@ -157,10 +157,10 @@ function Save-ProcExpExe {
         [Parameter()][string]$DownloadUrl = 'https://download.sysinternals.com/files/ProcessExplorer.zip'
     )
     
-    $tempDir = (Get-Item $env:TEMP).FullName
-    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $tempDir -DestinationName 'ProcessExplorer.zip' -Overwrite
+    $TempDir = (Get-Item $env:TEMP).FullName
+    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $TempDir -DestinationName 'ProcessExplorer.zip' -Overwrite
 
-    $ExtractDir = Join-Path $tempDir 'ProcessExplorer'
+    $ExtractDir = Join-Path $TempDir 'ProcessExplorer'
 
     if (-NOT (Test-Path $ExtractDir)) {
         New-Item -Path $ExtractDir -ItemType Directory
@@ -168,7 +168,7 @@ function Save-ProcExpExe {
 
     Expand-Archive -Path $Zip.FullName -DestinationPath $ExtractDir -Force
 
-    return (Join-Path $ExtractDir 'procexp64.exe')
+    return (Get-Item -Path (Join-Path $ExtractDir 'procexp64.exe')).FullName
 }
 
 function Set-ProcExpEulaAccepted {
