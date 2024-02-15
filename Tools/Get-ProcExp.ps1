@@ -24,7 +24,7 @@ function Save-WebFile {
     [OutputType([System.IO.FileInfo])]
     param
     (
-        [Parameter(Position=0, Mandatory, ValueFromPipelineByPropertyName)]
+        [Parameter(Position = 0, Mandatory, ValueFromPipelineByPropertyName)]
         [Alias('FileUri')]
         [System.String]
         $SourceUrl,
@@ -57,8 +57,7 @@ function Save-WebFile {
     #=================================================
     #	DestinationDirectory
     #=================================================
-    if (Test-Path "$DestinationDirectory")
-    {
+    if (Test-Path "$DestinationDirectory") {
         Write-Verbose "Directory already exists at $DestinationDirectory"
     }
     else {
@@ -75,7 +74,7 @@ function Save-WebFile {
         Remove-Item -Path $DestinationNewItem.FullName -Force | Out-Null
     }
     else {
-        Write-Warning "Unable to write to Destination Directory"
+        Write-Warning 'Unable to write to Destination Directory'
         Break
     }
     #=================================================
@@ -97,7 +96,7 @@ function Save-WebFile {
     #	OverWrite
     #=================================================
     if ((-NOT ($PSBoundParameters['Overwrite'])) -and (Test-Path $DestinationFullName)) {
-        Write-Verbose "DestinationFullName already exists"
+        Write-Verbose 'DestinationFullName already exists'
         Get-Item $DestinationFullName -Force
     }
     else {
@@ -155,25 +154,25 @@ function Save-WebFile {
 function Save-ProcExpExe {
     [CmdletBinding()]
     param (
-        [Parameter()][string]$DownloadUrl = "https://download.sysinternals.com/files/ProcessExplorer.zip"
+        [Parameter()][string]$DownloadUrl = 'https://download.sysinternals.com/files/ProcessExplorer.zip'
     )
     
     $tempDir = (Get-Item $env:TEMP).FullName
-
-    $ExtractDir = Join-Path $tempDir 'ProcessExplorer'
     $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $tempDir -DestinationName 'ProcessExplorer.zip' -Overwrite
 
-    if(-NOT (Test-Path $ExtractDir)){
+    $ExtractDir = Join-Path $tempDir 'ProcessExplorer'
+
+    if (-NOT (Test-Path $ExtractDir)) {
         New-Item -Path $ExtractDir -ItemType Directory
     }
 
-    Expand-Archive -Path $Zip -DestinationPath $ExtractDir -Force
+    Expand-Archive -Path $Zip.FullName -DestinationPath $ExtractDir -Force
 
     return (Join-Path $ExtractDir 'procexp64.exe')
 }
 
 function Set-ProcExpEulaAccepted {
-    reg add "HKCU\SOFTWARE\Sysinternals\Process Explorer" /v EulaAccepted /t REG_DWORD /d 1 /f | Out-Null
+    reg add 'HKCU\SOFTWARE\Sysinternals\Process Explorer' /v EulaAccepted /t REG_DWORD /d 1 /f | Out-Null
 }
 
 #=================================================
@@ -183,4 +182,4 @@ function Set-ProcExpEulaAccepted {
 Set-ProcExpEulaAccepted
 $ProcExp = Save-ProcExpExe
 
-& $ProcExp
+& "$ProcExp"
