@@ -158,17 +158,17 @@ function Save-ProcExpExe {
     )
     
     $TempDir = (Get-Item $env:TEMP).FullName
-    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $TempDir -DestinationName 'ProcessExplorer.zip' -Overwrite
-
     $ExtractDir = Join-Path $TempDir 'ProcessExplorer'
 
+    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $TempDir -DestinationName 'ProcessExplorer.zip' -Overwrite
+
     if (-NOT (Test-Path $ExtractDir)) {
-        New-Item -Path $ExtractDir -ItemType Directory
+        New-Item -Path $ExtractDir -ItemType Directory | Out-Null
     }
 
     Expand-Archive -Path $Zip.FullName -DestinationPath $ExtractDir -Force
 
-    return (Get-Item -Path (Join-Path $ExtractDir 'procexp64.exe')).FullName
+    return (Join-Path $ExtractDir 'procexp64.exe')
 }
 
 function Set-ProcExpEulaAccepted {
@@ -182,4 +182,4 @@ function Set-ProcExpEulaAccepted {
 Set-ProcExpEulaAccepted
 $ProcExp = Save-ProcExpExe
 
-Invoke-Expression "& $ProcExp"
+& "$ProcExp"

@@ -159,18 +159,17 @@ function Save-ProcMonExe {
     )
     
     $TempDir = (Get-Item $env:TEMP).FullName
-    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $TempDir -DestinationName 'ProcessMonitor.zip' -Overwrite
-
     $ExtractDir = Join-Path $TempDir 'ProcessMonitor'
 
+    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $TempDir -DestinationName 'ProcessMonitor.zip' -Overwrite
+
     if (-NOT (Test-Path $ExtractDir)) {
-        New-Item -Path $ExtractDir -ItemType Directory
+        New-Item -Path $ExtractDir -ItemType Directory | Out-Null
     }
 
     Expand-Archive -Path $Zip.FullName -DestinationPath $ExtractDir -Force
 
-    return (Get-Item -Path (Join-Path $ExtractDir 'Procmon64.exe')).FullName
-}
+    return (Join-Path $ExtractDir 'Procmon64.exe')
 
 function Set-ProcMonEulaAccepted {
     reg add "HKCU\SOFTWARE\Sysinternals\Process Monitor" /v EulaAccepted /t REG_DWORD /d 1 /f | Out-Null
@@ -183,4 +182,4 @@ function Set-ProcMonEulaAccepted {
 Set-ProcMonEulaAccepted
 $ProcMon = Save-ProcMonExe
 
-Invoke-Expression "& $ProcMon"
+& "$ProcMon"
