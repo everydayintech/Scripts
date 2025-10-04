@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-Downloads and runs TreeSizeFree.exe
+Downloads and runs WinDirStat
 .DESCRIPTION
-Downloads TreeSizeFree.exe to temp directory and executes
+Downloads WinDirStat to temp directory and executes
 .LINK
 https://everydayintech.com
 #>
@@ -152,16 +152,16 @@ function Save-WebFile {
     }
 }
 
-function Save-TreeSizeExe {
+function Save-WinDirStat {
     [CmdletBinding()]
     param (
-        [Parameter()][string]$DownloadUrl = "https://downloads.jam-software.de/treesize_free/TreeSizeFree-Portable.zip"
+        [Parameter()][string]$DownloadUrl = "https://github.com/windirstat/windirstat/releases/download/release/v2.2.2/WinDirStat.zip"
     )
     
     $TempDir = (Get-Item $env:TEMP).FullName
-    $ExtractDir = Join-Path $TempDir 'TreeSizeFree'
+    $ExtractDir = Join-Path $TempDir 'WinDirStatPortable'
 
-    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $TempDir -DestinationName 'TreeSizeFree-Portable.zip' -Overwrite
+    $Zip = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $TempDir -DestinationName 'WinDirStat-Portable.zip' -Overwrite
 
     if (-NOT (Test-Path $ExtractDir)) {
         New-Item -Path $ExtractDir -ItemType Directory | Out-Null
@@ -169,12 +169,12 @@ function Save-TreeSizeExe {
 
     Expand-Archive -Path $Zip.FullName -DestinationPath $ExtractDir -Force
 
-    return (Join-Path $ExtractDir 'TreeSizeFree.exe')
+    return (Join-Path $ExtractDir 'WinDirStat/x64/WinDirStat.exe')
 }
 
 #=================================================
 #	Main
 #=================================================
-$TreeSize = Save-TreeSizeExe
+$Binary = Save-WinDirStat
 
-& "$TreeSize"
+& "$Binary"
