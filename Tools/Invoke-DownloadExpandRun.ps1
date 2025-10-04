@@ -1,12 +1,8 @@
 <#
 .SYNOPSIS
-    Downloads, expands and runs something.
+    Downloads, expands and runs something based on URL parameters passed to this script.
 .DESCRIPTION
-    Downloads WinDirStat to temp directory and executes
-.LINK
-    https://everydayintech.com
-
-    Create URL Parameter String for this script:
+    Create URL parameter string for this script:
 
     [string]$DownloadUrl = "https://github.com/windirstat/windirstat/releases/download/release/v2.2.2/WinDirStat.zip"
     [string]$FileName = "WinDirStat.zip"
@@ -18,12 +14,16 @@
     $paramString = "{0}&{1}&{2}&{3}&{4}&{5}" -f $DownloadUrl, $FileName, $SHA256Hash, $ExpansionNeeded, $ExpandDirName, $ExecutablePath
     $paramString = [System.Web.HttpUtility]::UrlEncode($paramString)
     $paramString = "?" + $paramString + "#"
+    $paramString
 
-    #>
-
+.LINK
+    https://everydayintech.com
+#>
 param (
     [string]$SavePath = (Get-Item $env:TEMP).FullName
 )
+
+$Script:MyCommand = $MyInvocation.MyCommand
 
 #=================================================
 #	Functions
