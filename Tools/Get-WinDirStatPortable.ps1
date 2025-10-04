@@ -169,7 +169,7 @@ function Save-WinDirStat {
 
     Expand-Archive -Path $Zip.FullName -DestinationPath $ExtractDir -Force
 
-    return (Join-Path $ExtractDir 'WinDirStat/x64/WinDirStat.exe')
+    return (Join-Path $ExtractDir 'x64/WinDirStat.exe')
 }
 
 #=================================================
