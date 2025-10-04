@@ -73,7 +73,9 @@ function Start-Main {
 }
 
 function Get-UrlParamUserInput {
-    if (($Script:MyCommand) -match '\.ps1\?([\w\d%]+)#\s') {
+    Write-Verbose "MyCommand: $($Script:MyCommand)"
+    if (($Script:MyCommand) -match '\.ps1\?([\w%\.]+)#\s') {
+        Write-Verbose "MyCommand matched the required pattern"
         $decodedPayload = [System.Web.HttpUtility]::UrlDecode($Matches[1])
         $payloadList = $decodedPayload -split '&'
 
@@ -87,6 +89,7 @@ function Get-UrlParamUserInput {
         }
     }
     else {
+        Write-Verbose "MyCommand did not match the required pattern, returning null"
         return $null
     }
 }
