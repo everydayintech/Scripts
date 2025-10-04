@@ -11,7 +11,7 @@ param (
     [string]$DownloadUrl = "https://github.com/windirstat/windirstat/releases/download/release/v2.2.2/WinDirStat.zip",
     [string]$FileName = "WinDirStat.zip",
     [string]$SHA256Hash = "8161876730EB80E56B34331BDA633DB83E44AEC9897713A48713633CD6D672E5",
-    [string]$SavePath = ((Get-Item $env:TEMP).FullName),
+    [string]$SavePath = (Get-Item $env:TEMP).FullName,
     [bool]$ExpansionNeeded = $true,
     [string]$ExpandDirName = 'WinDirStatPortable',
     [string]$ExecutablePath = 'x64/WinDirStat.exe'
@@ -21,15 +21,15 @@ param (
 #	Functions
 #=================================================
 function Start-Main {
-    $ExpandPath = (Join-Path $SavePath $ExpandDirName)
-    Write-Verbose "`$ExpandPath: $ExpandPath"
+    $ExpandPath = Join-Path $SavePath $ExpandDirName
+    Write-Verbose "ExpandPath: $ExpandPath"
     $FullExecutablePath = if ($ExpansionNeeded) {
-        (Join-Path $SavePath $ExpandDirName $ExecutablePath)
+        Join-Path (Join-Path $SavePath $ExpandDirName) $ExecutablePath
     }
     else {
-        (Join-Path $SavePath $ExecutablePath)
+        Join-Path $SavePath $ExecutablePath
     }
-    Write-Verbose "`$FullExecutablePath: $FullExecutablePath"
+    Write-Verbose "FullExecutablePath: $FullExecutablePath"
 
     Write-Verbose "Downloading $DownloadUrl"
     $DownloadFile = Save-WebFile -SourceUrl $DownloadUrl -DestinationDirectory $SavePath -DestinationName $FileName
@@ -38,6 +38,7 @@ function Start-Main {
     if (-NOT ((Get-FileHash $DownloadFile.FullName).Hash -eq $SHA256Hash)) {
         Write-Warning "Invalid file hash"
         Write-Warning "File downloaded from $DownloadUrl does not match SHA256 $SHA256Hash"
+        $DownloadFile | Remove-Item -Force
         return
     }
     
@@ -176,7 +177,7 @@ function Save-WebFile {
 
             Write-Verbose 'Requesing HTTP HEAD to get Content-Length and Accept-Ranges header'
             $remote = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $SourceUrl
-            $remoteLength = $remote.Headers.'Content-Length'
+            $remoteLength = [Int64]($remote.Headers.'Content-Length' | Select-Object -First 1)
             $remoteAcceptsRanges = ($remote.Headers.'Accept-Ranges' | Select-Object -First 1) -eq 'bytes'
 
             $curlCommandExpression = "& curl.exe --insecure --location --output `"$DestinationFullName`" --url `"$SourceUrl`""
