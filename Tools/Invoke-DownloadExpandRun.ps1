@@ -27,6 +27,8 @@ param (
 
 $Script:MyCommand = $MyInvocation.MyCommand
 
+Add-Type -AssemblyName System.Web
+
 #=================================================
 #	Functions
 #=================================================
