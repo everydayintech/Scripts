@@ -200,7 +200,7 @@ function Save-WebFile {
         elseif (([System.Net.WebRequest]::DefaultWebProxy).Address) {
             $UseWebClient = $true
         }
-        elseif (!(Get-Command 'curl.exe' -ErrorAction SilentlyContinue)) {
+        elseif (!(Get-Command 'curl.exe' -ErrorAction 'SilentlyContinue')) {
             $UseWebClient = $true
         }
 
@@ -223,7 +223,7 @@ function Save-WebFile {
     
             if ($host.name -match 'PowerShell ISE Host') {
                 #PowerShell ISE will display a NativeCommandError, so progress will not be displayed
-                $Quiet = Invoke-Expression ($curlCommandExpression + ' 2>&1')
+                $null = Invoke-Expression ($curlCommandExpression + ' 2>&1')
             }
             else {
                 Invoke-Expression $curlCommandExpression
@@ -253,7 +253,7 @@ function Save-WebFile {
                 
                 if ($host.name -match 'PowerShell ISE Host') {
                     #PowerShell ISE will display a NativeCommandError, so progress will not be displayed
-                    $Quiet = Invoke-Expression ($curlCommandExpression + ' 2>&1')
+                    $null = Invoke-Expression ($curlCommandExpression + ' 2>&1')
                 }
                 else {
                     Invoke-Expression $curlCommandExpression
