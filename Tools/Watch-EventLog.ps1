@@ -7,12 +7,18 @@
 .EXAMPLE
     .\Watch-EventLog.ps1
 
-    Run the Watcher and choose Logs interactively
+    Run the Watcher and choose Logs interactively.
 .EXAMPLE
     . .\Watch-EventLog.ps1
     Watch-EventLog -LogSelection HyperV
 
-    Run the Watcher and show Hyper-V related Event Logs
+    Run the Watcher and show Hyper-V related Event Logs.
+.EXAMPLE
+    . .\Watch-EventLog.ps1
+    Watch-EventLog -LogSelection HyperV -PollIntervalSeconds 2 -CMTrace
+
+    Run the Watcher and show Hyper-V related Event Logs and view the logs in real time using CMTrace. Refresh every two seconds.
+    Note that cmtrace.exe must be present in $env:PATH
 #>
 
 function Watch-EventLog {
@@ -21,14 +27,17 @@ function Watch-EventLog {
         [Parameter(Mandatory = $true)]
         [ValidateSet('Application', 'System', 'Security', 'Autopilot', 'Intune', 'HyperV', 'Administrative')]
         [string]$LogSelection,
-        [switch]$HideInformationEvents,
         [int]$PollIntervalSeconds = 10,
         [switch]$CMTrace,
+        [switch]$HideInformationEvents,
         [switch]$Full,
         [DateTime]$StartTime = (Get-Date).AddDays(-1),
         [bool]$Monitor = $true,
         [string]$Title = "EventLogWatcher"
     )
+
+    # TODO: Add parameter for .evtx file
+    # TODO: Add parameter to ingest all .evtx in a folder
     
     #================================================
     # Main Variables
@@ -42,15 +51,8 @@ function Watch-EventLog {
         Information = 4
     }
 
-    $InfoWhite = @()
-    $InfoCyan = @(62402, 62406)
-    $InfoBlue = @()
-    $InfoDarkBlue = @()
-    
-    if ($Full) {
-        $ExcludeEventId = @()
-    }
-    else {
+    $ExcludeEventId = @()
+    if ($LogSelection -eq 'Autopilot' -and (-NOT $Full)) {
         $ExcludeEventId = @(3, 9, 10, 11, 90, 91)
         $ExcludeEventId += @(101, 104, 106, 108, 110, 111, 112, 144)
         $ExcludeEventId += @(200, 202, 257, 258, 259, 260, 263, 265, 266, 272)
@@ -111,13 +113,18 @@ function Watch-EventLog {
         | Where-Object { $_.Id -notin $ExcludeEventId } 
         $FilterHashtable.StartTime = $NewStartTime
 
-        $Clixml = "$EnvTemp\$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-Events.clixml"
+        $Clixml = Join-Path $EnvTemp "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-Events.clixml"
         
         $Results | Export-Clixml -Path $Clixml
         Add-Content -Path $CMTraceLogFile -Value (GetCMTraceLog -Results $Results) -Encoding UTF8
         
-        if ($CMTrace -and (Get-Command 'cmtrace.exe' -ErrorAction SilentlyContinue)) {
-            & cmtrace.exe "$CMTraceLogFile"
+        if ($CMTrace) {
+            if ((Get-Command 'cmtrace.exe' -ErrorAction SilentlyContinue)) {
+                & cmtrace.exe "$CMTraceLogFile"
+            }
+            else {
+                Write-Warning "cmtrace.exe not found. Make sure cmtrace.exe is present in `$env:PATH"
+            }
         }
 
         DisplayResults -Results $Results
@@ -136,11 +143,16 @@ function Watch-EventLog {
                 #================================================
                 # Get-WinEvent NewResults
                 #================================================
+                $NewStartTime = Get-Date
+                
                 $NewResults = @()
                 $NewResults = Get-WinEvent -FilterHashtable $FilterHashtable -ErrorAction Ignore `
                 | Sort-Object TimeCreated `
                 | Where-Object { $_.Id -notin $ExcludeEventId } `
                 | Where-Object { $_.TimeCreated -notin $Results.TimeCreated }
+
+                $FilterHashtable.StartTime = $NewStartTime
+
                 if ($NewResults) {
                     [array]$Results += [array]$NewResults
                     [array]$Results | Export-Clixml -Path $Clixml
@@ -364,6 +376,11 @@ function Watch-EventLog {
         param (
             $Results
         )
+
+        $InfoWhite = @()
+        $InfoCyan = @(62402, 62406)
+        $InfoBlue = @()
+        $InfoDarkBlue = @()
 
         foreach ($Item in $Results) {
             $ShortMessage = ($Item.Message -Split '\n')[0]
