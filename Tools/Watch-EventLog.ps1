@@ -154,44 +154,6 @@ function Watch-EventLog {
     #================================================
     # Functions
     #================================================
-    function DisplayResults {
-        param (
-            $Results
-        )
-
-        foreach ($Item in $Results) {
-            $ShortMessage = ($Item.Message -Split '\n')[0]
-
-            if ($Item.LevelDisplayName -eq 'Error') {
-                Write-Host "$($Item.TimeCreated) ERROR:$($Item.Id)`t$($ShortMessage)" -ForegroundColor Red
-            }
-            elseif ($Item.LevelDisplayName -eq 'Warning') {
-                Write-Host "$($Item.TimeCreated) WARN :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Yellow
-            }
-            elseif (($Item.Message -match 'fail') -or ($Item.Message -match 'empty profile')) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Red
-            }
-            elseif ($Item.Message -like "Autopilot*") {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Cyan
-            }
-            elseif ($Item.Id -in $InfoWhite) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor White
-            }
-            elseif ($Item.Id -in $InfoCyan) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Cyan
-            }
-            elseif ($Item.Id -in $InfoBlue) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Blue
-            }
-            elseif ($Item.Id -in $InfoDarkBlue) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor DarkBlue
-            }
-            else {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor DarkGray
-            }
-        }
-    }
-
     function UpdateWindowTitle {
         param (
             $WindowTitle,
@@ -398,6 +360,44 @@ function Watch-EventLog {
         return $xml
     }
 
+    function DisplayResults {
+        param (
+            $Results
+        )
+
+        foreach ($Item in $Results) {
+            $ShortMessage = ($Item.Message -Split '\n')[0]
+
+            if ($Item.LevelDisplayName -eq 'Error') {
+                Write-Host "$($Item.TimeCreated) ERROR:$($Item.Id)`t$($ShortMessage)" -ForegroundColor Red
+            }
+            elseif ($Item.LevelDisplayName -eq 'Warning') {
+                Write-Host "$($Item.TimeCreated) WARN :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Yellow
+            }
+            elseif (($Item.Message -match 'fail') -or ($Item.Message -match 'empty profile')) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Red
+            }
+            elseif ($Item.Message -like "Autopilot*") {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Cyan
+            }
+            elseif ($Item.Id -in $InfoWhite) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor White
+            }
+            elseif ($Item.Id -in $InfoCyan) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Cyan
+            }
+            elseif ($Item.Id -in $InfoBlue) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Blue
+            }
+            elseif ($Item.Id -in $InfoDarkBlue) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor DarkBlue
+            }
+            else {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor DarkGray
+            }
+        }
+    }
+
     function GetCMTraceLog {
         Param(
             $Results
@@ -423,7 +423,7 @@ function Watch-EventLog {
             }
 
             # Add whitespace before every newline to improve CMTrace compact text view in list
-            if($Message -is [string]) {
+            if ($Message -is [string]) {
                 $Message = $Message.Replace("`n", " `n")
             }
 
@@ -439,13 +439,13 @@ function Watch-EventLog {
         
         foreach ($Item in $Results) {
             if ($Item.LevelDisplayName -eq 'Error') {
-                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message $Item.Message -Type "Error" -Component $Item.ProviderName) 
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "ERROR: $($Item.Message)" -Type "Error" -Component $Item.ProviderName) 
             }
             elseif ($Item.LevelDisplayName -eq 'Warning') {
-                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message $Item.Message -Type "Warning" -Component $Item.ProviderName) 
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "WARN : $($Item.Message)" -Type "Warning" -Component $Item.ProviderName) 
             }
             else {
-                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message $Item.Message -Type "Info" -Component $Item.ProviderName) 
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "INFO : $($Item.Message)" -Type "Info" -Component $Item.ProviderName) 
             }
         }
     }
