@@ -104,9 +104,12 @@ function Watch-EventLog {
         #================================================
         # Get-WinEvent Results
         #================================================
+        $NewStartTime = Get-Date
         $Results = Get-WinEvent -FilterHashtable $FilterHashtable -ErrorAction Ignore `
         | Sort-Object TimeCreated `
-        | Where-Object { $_.Id -notin $ExcludeEventId }
+        | Where-Object { $_.Id -notin $ExcludeEventId } 
+        $FilterHashtable.StartTime = $NewStartTime
+
         $Clixml = "$EnvTemp\$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-Events.clixml"
         
         $Results | Export-Clixml -Path $Clixml
