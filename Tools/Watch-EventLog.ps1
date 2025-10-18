@@ -416,6 +416,9 @@ function Watch-EventLog {
                 "Error" { [int]$Type = 3 }
             }
 
+            # Add whitespace before every newline to improve CMTrace compact text view in list
+            $Message = $Message.Replace("`n", " `n")
+
             return "<![LOG[$Message]LOG]!>" + `
                 "<time=`"$($TimeCreated.ToString("HH:mm:ss.ffffff"))`" " + `
                 "date=`"$($TimeCreated.ToString("M-d-yyyy"))`" " + `
