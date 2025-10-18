@@ -23,6 +23,7 @@ function Watch-EventLog {
         [string]$LogSelection,
         [switch]$HideInformationEvents,
         [int]$PollIntervalSeconds = 10,
+        [switch]$CMTrace,
         [switch]$Full,
         [DateTime]$StartTime = (Get-Date).AddDays(-1),
         [bool]$Monitor = $true,
@@ -114,6 +115,11 @@ function Watch-EventLog {
         
         $Results | Export-Clixml -Path $Clixml
         Add-Content -Path $CMTraceLogFile -Value (GetCMTraceLog -Results $Results) -Encoding UTF8
+        
+        if ($CMTrace -and (Get-Command 'cmtrace.exe' -ErrorAction SilentlyContinue)) {
+            & cmtrace.exe "$CMTraceLogFile"
+        }
+
         DisplayResults -Results $Results
         #================================================
         # Monitor New Events
