@@ -21,64 +21,166 @@ function Watch-EventLog {
         [Parameter(Mandatory = $true)]
         [ValidateSet('Application', 'System', 'Security', 'Autopilot', 'Intune', 'HyperV', 'Administrative')]
         [string]$LogSelection,
+        [switch]$HideInformationEvents,
         [int]$PollIntervalSeconds = 10,
         [switch]$Full,
+        [DateTime]$StartTime = (Get-Date).AddDays(-1),
         [bool]$Monitor = $true,
-        [string]$Title = "EventLogWatcher",
-        [DateTime]$StartTime = (Get-Date).AddDays(-1)
+        [string]$Title = "EventLogWatcher"
     )
+    
+    #================================================
+    # Main Variables
+    #================================================
+    $FormatEnumerationLimit = -1
 
     $LogLevel = @{
-        Critical = 1
-        Error = 2
-        Warning = 3
+        Critical    = 1
+        Error       = 2
+        Warning     = 3
         Information = 4
     }
 
-    function DisplayResults {
-        param (
-            $Results
-        )
+    $InfoWhite = @()
+    $InfoCyan = @(62402, 62406)
+    $InfoBlue = @()
+    $InfoDarkBlue = @()
+    
+    if ($Full) {
+        $ExcludeEventId = @()
+    }
+    else {
+        $ExcludeEventId = @(3, 9, 10, 11, 90, 91)
+        $ExcludeEventId += @(101, 104, 106, 108, 110, 111, 112, 144)
+        $ExcludeEventId += @(200, 202, 257, 258, 259, 260, 263, 265, 266, 272)
+        $ExcludeEventId += @(507, 509, 510, 511, 512, 513, 514, 516, 518, 520, 522, 524, 525)
+        $ExcludeEventId += @(813)
+        $ExcludeEventId += @(1000, 1001, 1100, 1101, 1102, 1709)
+        $ExcludeEventId += @(28017, 28018, 28019, 28032, 28115, 28125)
+        $ExcludeEventId += @(62144, 62170, 62460)
+        $ExcludeEventId += @(705, 1007)
+    }
+
+    $Results = @()
+
+    #================================================
+    # Main
+    #================================================
+    function Start-Main {
         #================================================
-        # Display Results
+        # Initialize
         #================================================
-        foreach ($Item in $Results) {
-            if ($Item.LevelDisplayName -eq 'Error') {
-                Write-Host "$($Item.TimeCreated) ERROR:$($Item.Id)`t$($Item.Message)" -ForegroundColor Red
-            }
-            elseif ($Item.LevelDisplayName -eq 'Warning') {
-                Write-Host "$($Item.TimeCreated) WARN :$($Item.Id)`t$($Item.Message)" -ForegroundColor Yellow
-            }
-            elseif (($Item.Message -match 'fail') -or ($Item.Message -match 'empty profile')) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($Item.Message)" -ForegroundColor Red
-            }
-            elseif ($Item.Message -like "Autopilot*") {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($Item.Message)" -ForegroundColor Cyan
-            }
-            elseif ($Item.Id -in $InfoWhite) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($Item.Message)" -ForegroundColor White
-            }
-            elseif ($Item.Id -in $InfoCyan) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($Item.Message)" -ForegroundColor Cyan
-            }
-            elseif ($Item.Id -in $InfoBlue) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($Item.Message)" -ForegroundColor Blue
-            }
-            elseif ($Item.Id -in $InfoDarkBlue) {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($Item.Message)" -ForegroundColor DarkBlue
-            }
-            else {
-                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($Item.Message)" -ForegroundColor DarkGray
+        UpdateWindowTitle -WindowTitle $Title
+        $host.UI.RawUI.BufferSize = New-Object System.Management.Automation.Host.size(2000, 2000)
+        $host.ui.RawUI.BackgroundColor = ($bckgrnd = 'Black')
+        Clear-Host
+        #================================================
+        # Transcript
+        #================================================
+        $Transcript = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$Title.log"
+        $EnvTemp = (Get-Item -Path $env:TEMP).FullName
+        $TranscriptFile = Join-Path $EnvTemp $Transcript
+        Start-Transcript -Path $TranscriptFile -ErrorAction Ignore
+        $WindowTitle = "$Title $TranscriptFile"
+        UpdateWindowTitle -WindowTitle $WindowTitle
+
+        $CMTraceLog = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$Title.cmtrace.log"
+        $CMTraceLogFile = Join-Path $EnvTemp $CMTraceLog
+        
+        # Remove Line Wrap
+        reg add HKCU\Console /v LineWrap /t REG_DWORD /d 0 /f
+
+        #================================================
+        # FilterHashtable
+        #================================================
+        $FilterHashtable = @{
+            StartTime = $StartTime
+            LogName   = (GetLogNameList -LogSelection $LogSelection)
+        }
+
+        if ($HideInformationEvents) {
+            $FilterHashtable.SuppressHashFilter = @{ Level = $LogLevel.Information }
+        }
+        #================================================
+        # Get-WinEvent Results
+        #================================================
+        $Results = Get-WinEvent -FilterHashtable $FilterHashtable -ErrorAction Ignore `
+        | Sort-Object TimeCreated `
+        | Where-Object { $_.Id -notin $ExcludeEventId }
+        $Clixml = "$EnvTemp\$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-Events.clixml"
+        
+        $Results | Export-Clixml -Path $Clixml
+        Add-Content -Path $CMTraceLogFile -Value (GetCMTraceLog -Results $Results) -Encoding UTF8
+        DisplayResults -Results $Results
+        #================================================
+        # Monitor New Events
+        #================================================
+        if ($Monitor) {
+            Write-Host -ForegroundColor Cyan "Listening for new events"
+            while ($true) {
+                $SecondsPassedWaiting = 0
+                while ($SecondsPassedWaiting -le $PollIntervalSeconds) {
+                    UpdateWindowTitle -WindowTitle $WindowTitle -NextRefreshIn ($PollIntervalSeconds - $SecondsPassedWaiting)
+                    Start-Sleep -Seconds 1
+                    $SecondsPassedWaiting += 1
+                }
+                #================================================
+                # Get-WinEvent NewResults
+                #================================================
+                $NewResults = @()
+                $NewResults = Get-WinEvent -FilterHashtable $FilterHashtable -ErrorAction Ignore `
+                | Sort-Object TimeCreated `
+                | Where-Object { $_.Id -notin $ExcludeEventId } `
+                | Where-Object { $_.TimeCreated -notin $Results.TimeCreated }
+                if ($NewResults) {
+                    [array]$Results += [array]$NewResults
+                    [array]$Results | Export-Clixml -Path $Clixml
+                    Add-Content -Path $CMTraceLogFile -Value (GetCMTraceLog -Results $NewResults) -Encoding UTF8
+                    DisplayResults -Results $NewResults
+                }
             }
         }
     }
 
-    function Get-MyWinEvent {
+    #================================================
+    # Functions
+    #================================================
+    function DisplayResults {
         param (
-            $LogSelection,
-            $StartTime
+            $Results
         )
 
+        foreach ($Item in $Results) {
+            $ShortMessage = ($Item.Message -Split '\n')[0]
+
+            if ($Item.LevelDisplayName -eq 'Error') {
+                Write-Host "$($Item.TimeCreated) ERROR:$($Item.Id)`t$($ShortMessage)" -ForegroundColor Red
+            }
+            elseif ($Item.LevelDisplayName -eq 'Warning') {
+                Write-Host "$($Item.TimeCreated) WARN :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Yellow
+            }
+            elseif (($Item.Message -match 'fail') -or ($Item.Message -match 'empty profile')) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Red
+            }
+            elseif ($Item.Message -like "Autopilot*") {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Cyan
+            }
+            elseif ($Item.Id -in $InfoWhite) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor White
+            }
+            elseif ($Item.Id -in $InfoCyan) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Cyan
+            }
+            elseif ($Item.Id -in $InfoBlue) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor Blue
+            }
+            elseif ($Item.Id -in $InfoDarkBlue) {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor DarkBlue
+            }
+            else {
+                Write-Host "$($Item.TimeCreated) INFO :$($Item.Id)`t$($ShortMessage)" -ForegroundColor DarkGray
+            }
+        }
     }
 
     function UpdateWindowTitle {
@@ -287,92 +389,54 @@ function Watch-EventLog {
         return $xml
     }
 
-    #================================================
-    # Initialize
-    #================================================
-    UpdateWindowTitle -WindowTitle $Title
-    $host.UI.RawUI.BufferSize = New-Object System.Management.Automation.Host.size(2000, 2000)
-    $host.ui.RawUI.BackgroundColor = ($bckgrnd = 'Black')
-    Clear-Host
-    #================================================
-    # Transcript
-    #================================================
-    $Transcript = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$Title.log"
-    $EnvTemp = (Get-Item -Path $env:TEMP).FullName
-    $TranscriptFile = Join-Path $EnvTemp $Transcript
-    Start-Transcript -Path $TranscriptFile -ErrorAction Ignore
-    $WindowTitle = "$Title $TranscriptFile"
-    UpdateWindowTitle -WindowTitle $WindowTitle
-    #================================================
-    # Main Variables
-    #================================================
-    $Results = @()
-    $FormatEnumerationLimit = -1
-    
-    $InfoWhite = @()
-    $InfoCyan = @(62402, 62406)
-    $InfoBlue = @()
-    $InfoDarkBlue = @()
-    
-    if ($Full) {
-        $ExcludeEventId = @()
-    }
-    else {
-        $ExcludeEventId = @(3, 9, 10, 11, 90, 91)
-        $ExcludeEventId += @(101, 104, 106, 108, 110, 111, 112, 144)
-        $ExcludeEventId += @(200, 202, 257, 258, 259, 260, 263, 265, 266, 272)
-        $ExcludeEventId += @(507, 509, 510, 511, 512, 513, 514, 516, 518, 520, 522, 524, 525)
-        $ExcludeEventId += @(813)
-        $ExcludeEventId += @(1000, 1001, 1100, 1101, 1102, 1709)
-        $ExcludeEventId += @(28017, 28018, 28019, 28032, 28115, 28125)
-        $ExcludeEventId += @(62144, 62170, 62460)
-        $ExcludeEventId += @(705, 1007)
-    }
+    function GetCMTraceLog {
+        Param(
+            $Results
+        )
 
-    # Remove Line Wrap
-    reg add HKCU\Console /v LineWrap /t REG_DWORD /d 0 /f
+        $context = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $thread = [Threading.Thread]::CurrentThread.ManagedThreadId
 
-    #================================================
-    # FilterHashtable
-    #================================================
-    $FilterHashtable = @{
-        StartTime = $StartTime
-        LogName   = (GetLogNameList -LogSelection $LogSelection)
-        Level     = @($LogLevel.Critical, $LogLevel.Error, $LogLevel.Warning, $LogLevel.Information)
-    }
-    #================================================
-    # Get-WinEvent Results
-    #================================================
-    $Results = Get-WinEvent -FilterHashtable $FilterHashtable -ErrorAction Ignore | Sort-Object TimeCreated | Where-Object { $_.Id -notin $ExcludeEventId }
-    $Results = $Results | Select-Object TimeCreated, LevelDisplayName, LogName, Id, @{Name = 'Message'; Expression = { ($_.Message -Split '\n')[0] } }
-    $Clixml = "$EnvTemp\$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-Events.clixml"
-    $Results | Export-Clixml -Path $Clixml
-    DisplayResults -Results $Results
-    #================================================
-    # Monitor New Events
-    #================================================
-    if ($Monitor) {
-        Write-Host -ForegroundColor Cyan "Listening for new events"
-        while ($true) {
-            $SecondsPassedWaiting = 0
-            while ($SecondsPassedWaiting -le $PollIntervalSeconds) {
-                UpdateWindowTitle -WindowTitle $WindowTitle -NextRefreshIn ($PollIntervalSeconds - $SecondsPassedWaiting)
-                Start-Sleep -Seconds 1
-                $SecondsPassedWaiting += 1
+        function GetLine {
+            param (
+                $Message,
+                $Component,
+                $TimeCreated,
+                [Parameter(Mandatory = $true)]
+                [ValidateSet("Info", "Warning", "Error")]
+                $Type
+            )
+            
+            switch ($Type) {
+                "Info" { [int]$Type = 1 }
+                "Warning" { [int]$Type = 2 }
+                "Error" { [int]$Type = 3 }
             }
-            #================================================
-            # Get-WinEvent NewResults
-            #================================================
-            $NewResults = @()
-            $NewResults = Get-WinEvent -FilterHashtable $FilterHashtable -ErrorAction Ignore | Sort-Object TimeCreated | Where-Object { $_.Id -notin $ExcludeEventId } | Where-Object { $_.TimeCreated -notin $Results.TimeCreated }
-            if ($NewResults) {
-                [array]$Results += [array]$NewResults
-                [array]$Results | Export-Clixml -Path $Clixml
+
+            return "<![LOG[$Message]LOG]!>" + `
+                "<time=`"$($TimeCreated.ToString("HH:mm:ss.ffffff"))`" " + `
+                "date=`"$($TimeCreated.ToString("M-d-yyyy"))`" " + `
+                "component=`"$Component`" " + `
+                "context=`"$($context)`" " + `
+                "type=`"$Type`" " + `
+                "thread=`"$($thread)`" " + `
+                "file=`"`">"
+        }
+        
+        foreach ($Item in $Results) {
+            if ($Item.LevelDisplayName -eq 'Error') {
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message $Item.Message -Type "Error" -Component $Item.ProviderName) 
             }
-            $NewResults = $NewResults | Select-Object TimeCreated, LevelDisplayName, LogName, Id, @{Name = 'Message'; Expression = { ($_.Message -Split '\n')[0] } }
-            DisplayResults -Results $NewResults
+            elseif ($Item.LevelDisplayName -eq 'Warning') {
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message $Item.Message -Type "Warning" -Component $Item.ProviderName) 
+            }
+            else {
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message $Item.Message -Type "Info" -Component $Item.ProviderName) 
+            }
         }
     }
+
+    Start-Main 
 }
 
 $isDotSourced = $MyInvocation.InvocationName -in '.', ''
