@@ -423,7 +423,9 @@ function Watch-EventLog {
             }
 
             # Add whitespace before every newline to improve CMTrace compact text view in list
-            $Message = $Message.Replace("`n", " `n")
+            if($Message -is [string]) {
+                $Message = $Message.Replace("`n", " `n")
+            }
 
             return "<![LOG[$Message]LOG]!>" + `
                 "<time=`"$($TimeCreated.ToString("HH:mm:ss.ffffff"))`" " + `
