@@ -404,7 +404,6 @@ function Watch-EventLog {
         )
 
         $context = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-        $thread = [Threading.Thread]::CurrentThread.ManagedThreadId
 
         function GetLine {
             param (
@@ -413,7 +412,8 @@ function Watch-EventLog {
                 $TimeCreated,
                 [Parameter(Mandatory = $true)]
                 [ValidateSet("Info", "Warning", "Error")]
-                $Type
+                $Type,
+                $Thread
             )
             
             switch ($Type) {
@@ -433,19 +433,19 @@ function Watch-EventLog {
                 "component=`"$Component`" " + `
                 "context=`"$($context)`" " + `
                 "type=`"$Type`" " + `
-                "thread=`"$($thread)`" " + `
+                "thread=`"$($Thread)`" " + `
                 "file=`"`">"
         }
         
         foreach ($Item in $Results) {
-            if ($Item.LevelDisplayName -eq 'Error') {
-                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "ERROR: $($Item.Message)" -Type "Error" -Component $Item.ProviderName) 
+            if ($Item.Level -eq $LogLevel.Error) {
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "ERROR: $($Item.Message)" -Type "Error" -Component $Item.ProviderName -Thread $Item.Id) 
             }
-            elseif ($Item.LevelDisplayName -eq 'Warning') {
-                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "WARN : $($Item.Message)" -Type "Warning" -Component $Item.ProviderName) 
+            elseif ($Item.Level -eq $LogLevel.Warning) {
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "WARN: $($Item.Message)" -Type "Warning" -Component $Item.ProviderName -Thread $Item.Id) 
             }
             else {
-                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "INFO : $($Item.Message)" -Type "Info" -Component $Item.ProviderName) 
+                Write-Output (GetLine -TimeCreated $Item.TimeCreated -Message "INFO: $($Item.Message)" -Type "Info" -Component $Item.ProviderName -Thread $Item.Id) 
             }
         }
     }
