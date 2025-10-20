@@ -24,7 +24,7 @@ function Save-WebFile {
     [OutputType([System.IO.FileInfo])]
     param
     (
-        [Parameter(Position=0, Mandatory, ValueFromPipelineByPropertyName)]
+        [Parameter(Position = 0, Mandatory, ValueFromPipelineByPropertyName)]
         [Alias('FileUri')]
         [System.String]
         $SourceUrl,
@@ -57,8 +57,7 @@ function Save-WebFile {
     #=================================================
     #	DestinationDirectory
     #=================================================
-    if (Test-Path "$DestinationDirectory")
-    {
+    if (Test-Path "$DestinationDirectory") {
         Write-Verbose "Directory already exists at $DestinationDirectory"
     }
     else {
@@ -155,18 +154,23 @@ function Save-WebFile {
 function Save-CMTraceExe {
     [CmdletBinding()]
     param (
-        [Parameter()][string]$CMTraceURL = "https://raw.githubusercontent.com/everydayintech/Scripts/main/bin/cmtrace.exe"
+        [Parameter()][string]$CMTraceURL = "https://raw.githubusercontent.com/everydayintech/Scripts/main/bin/cmtrace.exe",
+        [Parameter()][string]$TargetDir 
     )
     
-    $tempDir = (Get-Item $env:TEMP).FullName
 
-    return (Save-WebFile -SourceUrl $CMTraceURL -DestinationDirectory $tempDir -DestinationName 'CMTrace.exe' -Overwrite)
+    return (Save-WebFile -SourceUrl $CMTraceURL -DestinationDirectory $TargetDir -DestinationName 'CMTrace.exe' -Overwrite)
 }
 
 #=================================================
 #	Main
 #=================================================
 
+$TempDir = (Get-Item $env:TEMP).FullName
+$TargetDir = Join-Path $TempDir 'CMTrace'
+New-Item -ItemType Directory $TargetDir -ErrorAction SilentlyContinue | Out-Null
+
 $CMTrace = Save-CMTraceExe
+$env:PATH += ";$TargetDir"
 
 Invoke-Expression "& $CMTrace"
