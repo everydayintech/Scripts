@@ -170,7 +170,7 @@ $TempDir = (Get-Item $env:TEMP).FullName
 $TargetDir = Join-Path $TempDir 'CMTrace'
 New-Item -ItemType Directory $TargetDir -ErrorAction SilentlyContinue | Out-Null
 
-$CMTrace = Save-CMTraceExe
+$CMTrace = Save-CMTraceExe -TargetDir $TargetDir
 $env:PATH += ";$TargetDir"
 
 Invoke-Expression "& $CMTrace"
