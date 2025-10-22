@@ -81,14 +81,15 @@ function Watch-EventLog {
         #================================================
         # Transcript
         #================================================
-        $Transcript = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$Title-$LogSelection.log"
+        $Hostname = $(HOSTNAME.EXE)
+        $Transcript = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$Title-$Hostname-$LogSelection.log"
         $EnvTemp = (Get-Item -Path $env:TEMP).FullName
         $TranscriptFile = Join-Path $EnvTemp $Transcript
         Start-Transcript -Path $TranscriptFile -ErrorAction Ignore
         $WindowTitle = "$Title [$LogSelection] $TranscriptFile"
         UpdateWindowTitle -WindowTitle $WindowTitle
 
-        $CMTraceLog = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$Title-$LogSelection.cmtrace.log"
+        $CMTraceLog = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$Title-$Hostname-$LogSelection.cmtrace.log"
         $CMTraceLogFile = Join-Path $EnvTemp $CMTraceLog
         
         # Remove Line Wrap
