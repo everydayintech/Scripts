@@ -8,7 +8,9 @@ if ([string]::IsNullOrEmpty($accessToken)) {
 
 # global variables
 $allWindowsDevices = @()
-$allDiscoveredAppsHT = @{}
+$discoveredAppNameToDeviceIdHT = @{}
+$discoveredAppNameToAppIdHT = @{}
+
 $intuneDeviceIdToAadDeviceIdHT = @{}
 $aadDeviceIdToObjectIdHT = @{}
 
@@ -17,14 +19,8 @@ $headers = @{
     "authorization" = "Bearer $accessToken"
 }
 
-# get all intune windows devices
-$allWindowsDevicesResponse = Invoke-WebRequest -UseBasicParsing `
-    -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?`$filter=(Notes%20eq%20'bc3e5c73-e224-4e63-9b2b-0c36784b7e80')%20and%20(((deviceType%20eq%20'desktop')%20or%20(deviceType%20eq%20'windowsRT')%20or%20(deviceType%20eq%20'winEmbedded')%20or%20(deviceType%20eq%20'surfaceHub')%20or%20(deviceType%20eq%20'windows10x')%20or%20(deviceType%20eq%20'windowsPhone')%20or%20(deviceType%20eq%20'holoLens')))&`$select=deviceName,managementAgent,ownerType,complianceState,deviceType,osVersion,userPrincipalName,lastSyncDateTime,enrolledDateTime,serialNumber,azureADDeviceId,id,deviceRegistrationState,managementState,exchangeAccessState,exchangeAccessStateReason,deviceActionResults,jailbroken,deviceEnrollmentType&`$orderby=enrolledDateTime%20asc&`$skipToken=Skip='0'&" `
-    -WebSession $session `
-    -Headers $headers
-
-$allWindowsDevicesResponseJson = $allWindowsDevicesResponse | ConvertFrom-Json
-$allWindowsDevices = $allWindowsDevicesResponseJson.value
+# get all intune windows devices (Query copied from Windows devices blade)
+$allWindowsDevices = InvokePagedGetRequest -requestUri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?`$filter=(Notes eq 'bc3e5c73-e224-4e63-9b2b-0c36784b7e80') and (((deviceType eq 'desktop') or (deviceType eq 'windowsRT') or (deviceType eq 'winEmbedded') or (deviceType eq 'surfaceHub') or (deviceType eq 'windows10x') or (deviceType eq 'windowsPhone') or (deviceType eq 'holoLens')))&`$select=deviceName,managementAgent,ownerType,complianceState,deviceType,osVersion,userPrincipalName,lastSyncDateTime,enrolledDateTime,serialNumber,azureADDeviceId,id,deviceRegistrationState,managementState,deviceActionResults,jailbroken,deviceEnrollmentType&`$orderby=enrolledDateTime asc"
 
 function GetDevices {
     param (
@@ -39,7 +35,6 @@ function GetDevices {
     }
 }
 
-# build id conversion hashtables
 function GetAadObjectIdFromAadDeviceId {
     param (
         $deviceId
@@ -54,46 +49,123 @@ function GetAadObjectIdFromAadDeviceId {
     return $objectId
 }
 
+# build device id conversion hashtables
 $allWindowsDevices | ForEach-Object { $intuneDeviceIdToAadDeviceIdHT[$_.id] = $_.azureADDeviceId }
 $allWindowsDevices | ForEach-Object { $aadDeviceIdToObjectIdHT[$_.azureADDeviceId] = GetAadObjectIdFromAadDeviceId -deviceId $_.azureADDeviceId }
 
-function GetDetectedApps {
+function GetDetectedAppsOnDevice {
     param (
         $deviceId
     )
-    
-    $detectedAppsResponse = Invoke-WebRequest -UseBasicParsing `
-        -Uri "https://graph.microsoft.com/beta/deviceManagement/manageddevices('$deviceId')/detectedApps?`$top=1000&`$orderBy=displayName%20asc" `
-        -WebSession $session `
-        -Headers $headers
 
-    $detectedAppsResponse.Content | ConvertFrom-Json
+    $requestUri = "https://graph.microsoft.com/beta/deviceManagement/manageddevices('$deviceId')/detectedApps?`$top=50&`$orderBy=displayName asc"
+    $data = InvokePagedGetRequest -requestUri $requestUri
+    
+    return $data
 }
 
-function DiscoverDetectedApps {
+function GetDetectedAppsFromMonitor {
+    param (
+    )
+
+    # filtering for platform does not seem to work ($filter=platform eq 'windows')
+    $requestUri = "https://graph.microsoft.com/beta/deviceManagement/detectedApps?`$orderBy=displayName"
+    $data = InvokePagedGetRequest -requestUri $requestUri
+    return ($data | Where-Object { $_.platform -eq 'windows' })
+}
+
+function InvokePagedGetRequest {
+    param (
+        $requestUri
+    )
+
+    $moreDataAvailable = $true
+    $data = while ($moreDataAvailable) {
+        $response = Invoke-WebRequest -UseBasicParsing `
+            -Uri $requestUri `
+            -WebSession $session `
+            -Headers $headers
+
+        $parsedResponse = $response.Content | ConvertFrom-Json
+
+        # check if more data needs to be retreived
+        $nextLink = $parsedResponse.'@odata.nextLink'
+        if ($null -ne $nextLink) {
+            $requestUri = $nextLink
+        }
+        else {
+            $moreDataAvailable = $false
+        }
+
+        # emit data of current request
+        $parsedResponse.value
+    }
+
+    return $data
+}
+
+function DiscoverDetectedAppsOnDevice {
     param (
         $deviceId
     )
 
-    $detectedApps = (GetDetectedApps -deviceId $deviceId).value
+    $detectedApps = GetDetectedAppsOnDevice -deviceId $deviceId
 
     foreach ($detectedApp in $detectedApps) {
         if ([String]::IsNullOrEmpty($detectedApp.displayName)) {
             continue
         }
 
-        Write-Host "processing app $($detectedApp.displayName)"
+        Write-Verbose "processing app $($detectedApp.displayName)"
+        $hashTableKey = "$($detectedApp.displayName) [$($detectedApp.version)]"
 
-        if ($null -eq $allDiscoveredAppsHT[$detectedApp.displayName]) {
-            $allDiscoveredAppsHT[$detectedApp.displayName] = New-Object -TypeName System.Collections.Generic.HashSet[string]
+        if ($null -eq $discoveredAppNameToDeviceIdHT[$hashTableKey]) {
+            $discoveredAppNameToDeviceIdHT[$hashTableKey] = New-Object -TypeName System.Collections.Generic.HashSet[string]
         }
 
-        $AlreadyPresent = $allDiscoveredAppsHT[$detectedApp.displayName].Add($deviceId)
+        $AlreadyPresent = $discoveredAppNameToDeviceIdHT[$hashTableKey].Add($deviceId)
     }
 }
 
-foreach ($item in $allWindowsDevices) {
-    DiscoverDetectedApps -deviceId $item.id
+function DiscoverDetectedAppsOnAllDevices {
+    param (
+    )
+
+    foreach ($item in $allWindowsDevices) {
+        Write-Host "processing device $($item.deviceName)"
+        DiscoverDetectedAppsOnDevice -deviceId $item.id
+    }
+}
+
+Write-Host "Run DiscoverDetectedAppsOnAllDevices to build index based on every device"
+
+function DiscoverDetectedAppsFromMonitor {
+    param (
+    )
+
+    $discoveredApps = GetDetectedAppsFromMonitor
+    foreach ($item in $discoveredApps) {
+        Write-Verbose "processing app $($item.displayName)"
+        $hashTableKey = "$($item.displayName) [$($item.version)]"
+
+        if ($null -eq $discoveredAppNameToAppIdHT[$hashTableKey]) {
+            $discoveredAppNameToAppIdHT[$hashTableKey] = New-Object -TypeName System.Collections.Generic.HashSet[string]
+        }
+
+        $AlreadyPresent = $discoveredAppNameToAppIdHT[$hashTableKey].Add($item.id)
+    }
+}
+Write-Host "Run DiscoverDetectedAppsFromMonitor to build index based on tenant wide monitor data"
+
+function FindDetectedApp {
+    param (
+        $expression
+    )
+    
+    $matchingKeys = $discoveredAppNameToDeviceIdHT.Keys | Where-Object { $_ -match $expression }
+    Write-Verbose "matching keys: $($matchingKeys | Join-String -Separator ', ')"
+   
+    return $matchingKeys
 }
 
 function FindDevicesWithDetectedApp {
@@ -101,16 +173,58 @@ function FindDevicesWithDetectedApp {
         $expression
     )
     
-    $matchingKeys = $allDiscoveredAppsHT.Keys | Where-Object { $_ -match $expression }
-    Write-Verbose "matching keys: $($matchingKeys | Join-String -Separator ', ')"
+    $matchingKeys = FindDetectedApp -expression $expression
 
     $devices = New-Object -TypeName System.Collections.Generic.HashSet[string]
     foreach ($item in $matchingKeys) {
-        $deviceIds = $allDiscoveredAppsHT[$item] 
+        $deviceIds = $discoveredAppNameToDeviceIdHT[$item] 
         $deviceIds | ForEach-Object { $null = $devices.Add($_) }
     }
 
     return $devices
+}
+
+function GetDevicesWithAppId {
+    param (
+        $appId
+    )
+   
+    $requestUri = "https://graph.microsoft.com/beta/deviceManagement/detectedApps('$appId')/managedDevices?`$top=50&`$select=id&`$orderby=deviceName asc"
+    $data = InvokePagedGetRequest -requestUri $requestUri
+    return ($data | Select-Object -ExpandProperty id)
+}
+
+function FindDetectedAppFromMonitor {
+    param (
+        $expression
+    )
+    
+    $matchingKeys = $discoveredAppNameToAppIdHT.Keys | Where-Object { $_ -match $expression }
+    Write-Verbose "matching keys: $($matchingKeys | Join-String -Separator ', ')"
+   
+    return $matchingKeys
+}
+
+function FindDevicesWithDetectedAppFromMonitor {
+    param (
+        $expression
+    )
+    
+    $matchingKeys = FindDetectedAppFromMonitor -expression $expression
+
+    $appIds = New-Object -TypeName System.Collections.Generic.HashSet[string]
+    foreach ($item in $matchingKeys) {
+        $Ids = $discoveredAppNameToAppIdHT[$item] 
+        $Ids | ForEach-Object { $null = $appIds.Add($_) }
+    }
+
+    $deviceIds = New-Object -TypeName System.Collections.Generic.HashSet[string]
+    foreach ($item in $appIds) {
+        $DevIds = GetDevicesWithAppId -appId $item
+        $DevIds | ForEach-Object { $null = $deviceIds.Add($_) }
+    }
+
+   return $deviceIds 
 }
 
 function ResolveDevices {
@@ -133,7 +247,6 @@ function ResolveDevices {
         $allWindowsDevices | Where-Object { $_.id -eq $item }
     }
 }
-
 
 function NewBatchRequestObject {
     param (
@@ -162,8 +275,6 @@ function SendBatchRequest {
         requests = $RequestObjects
     }
 
-    # TODO: only send n Requests per Batch!
-
     $requestBodyJson = $requestBody | ConvertTo-Json -Depth 100
 
     $response = Invoke-WebRequest -UseBasicParsing `
@@ -180,18 +291,40 @@ function SendBatchRequest {
     return $response
 }
 
+function SendMultipleBatchRequests {
+    param (
+        [PSCustomObject[]]$RequestObjects
+    )
+
+    $maxBatchSize = 20
+    $sendCount = 0
+    $totalCount = $RequestObjects.Count
+
+    $responses = while ($sendCount -lt $totalCount) {
+        $nextRequestObjects = $RequestObjects | Select-Object -First $maxBatchSize -Skip $sendCount
+        $sendCount += $nextRequestObjects.Length
+        SendBatchRequest -RequestObjects $nextRequestObjects
+    }
+
+    $combinedResponse = @{
+        batchResponses = $responses
+    }
+
+    return $combinedResponse
+}
+
 function NewAddDeviceToGroupRequestObject {
     param (
         $GroupId,
-        $DeviceId
+        $DeviceObjectId
     )
 
     $obj = NewBatchRequestObject `
-        -Id "member_$($GroupId)_$($DeviceId)" `
+        -Id "member_$($GroupId)_$($DeviceObjectId)" `
         -Method "POST" `
         -Url "/groups/$GroupId/members/`$ref" `
         -Headers @{"Content-Type" = "application/json" } `
-        -Body @{"@odata.id" = "https://graph.microsoft.com/beta/directoryObjects/$DeviceId" }
+        -Body @{"@odata.id" = "https://graph.microsoft.com/beta/directoryObjects/$DeviceObjectId" }
 
     return $obj 
 }
@@ -226,12 +359,13 @@ function AddDevicesToGroup {
         [string]$GroupId,
         [string[]]$DeviceIds
     )
- 
+
     $batchRequestObjects = $DeviceIds | ForEach-Object {
         $aadObjectId = $aadDeviceIdToObjectIdHT[$intuneDeviceIdToAadDeviceIdHT[$_]]
-        NewAddDeviceToGroupRequestObject -GroupId $GroupId -DeviceId $aadObjectId
+        NewAddDeviceToGroupRequestObject -GroupId $GroupId -DeviceObjectId $aadObjectId
     }
-    SendBatchRequest -RequestObjects $batchRequestObjects
+
+    SendMultipleBatchRequests -RequestObjects $batchRequestObjects
 }
 
 function CreateGroupAndAddDevices {
