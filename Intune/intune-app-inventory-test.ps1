@@ -306,11 +306,7 @@ function SendMultipleBatchRequests {
         SendBatchRequest -RequestObjects $nextRequestObjects
     }
 
-    $combinedResponse = @{
-        batchResponses = $responses
-    }
-
-    return $combinedResponse
+    return $responses
 }
 
 function NewAddDeviceToGroupRequestObject {
@@ -378,4 +374,14 @@ function CreateGroupAndAddDevices {
     $groupId = $result.id
 
     AddDevicesToGroup -GroupId $groupId -DeviceIds $DeviceIds
+}
+
+function CreateSoftwareUpdateGroupAndAddDevices {
+    param (
+        [string]$AppName,
+        [string[]]$DeviceIds
+    )
+
+    $GroupName = "AAD_GR_GSC_Intune_SoftwareUpdate_$($AppName)_$(Get-Date -Format yyyyMMdd)"
+    CreateGroupAndAddDevices -GroupName $GroupName -DeviceIds $DeviceIds 
 }
