@@ -19,8 +19,17 @@ $headers = @{
     "authorization" = "Bearer $accessToken"
 }
 
-# get all intune windows devices (Query copied from Windows devices blade)
-$allWindowsDevices = InvokePagedGetRequest -requestUri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?`$filter=(Notes eq 'bc3e5c73-e224-4e63-9b2b-0c36784b7e80') and (((deviceType eq 'desktop') or (deviceType eq 'windowsRT') or (deviceType eq 'winEmbedded') or (deviceType eq 'surfaceHub') or (deviceType eq 'windows10x') or (deviceType eq 'windowsPhone') or (deviceType eq 'holoLens')))&`$select=deviceName,managementAgent,ownerType,complianceState,deviceType,osVersion,userPrincipalName,lastSyncDateTime,enrolledDateTime,serialNumber,azureADDeviceId,id,deviceRegistrationState,managementState,deviceActionResults,jailbroken,deviceEnrollmentType&`$orderby=enrolledDateTime asc"
+function GetAllWindowsDevices {
+    param (
+    )
+    # get all intune windows devices (Query copied from Windows devices blade)
+    $allWindowsDevices = InvokePagedGetRequest -requestUri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?`$filter=(Notes eq 'bc3e5c73-e224-4e63-9b2b-0c36784b7e80') and (((deviceType eq 'desktop') or (deviceType eq 'windowsRT') or (deviceType eq 'winEmbedded') or (deviceType eq 'surfaceHub') or (deviceType eq 'windows10x') or (deviceType eq 'windowsPhone') or (deviceType eq 'holoLens')))&`$select=deviceName,managementAgent,ownerType,complianceState,deviceType,osVersion,userPrincipalName,lastSyncDateTime,enrolledDateTime,serialNumber,azureADDeviceId,id,deviceRegistrationState,managementState,deviceActionResults,jailbroken,deviceEnrollmentType&`$orderby=enrolledDateTime asc"
+
+    # build device id conversion hashtables
+    $allWindowsDevices | ForEach-Object { $intuneDeviceIdToAadDeviceIdHT[$_.id] = $_.azureADDeviceId }
+    $allWindowsDevices | ForEach-Object { $aadDeviceIdToObjectIdHT[$_.azureADDeviceId] = GetAadObjectIdFromAadDeviceId -deviceId $_.azureADDeviceId }
+}
+Write-Host "Run GetAllWindowsDevices to index devices and id conversion tables"
 
 function GetDevices {
     param (
@@ -49,9 +58,6 @@ function GetAadObjectIdFromAadDeviceId {
     return $objectId
 }
 
-# build device id conversion hashtables
-$allWindowsDevices | ForEach-Object { $intuneDeviceIdToAadDeviceIdHT[$_.id] = $_.azureADDeviceId }
-$allWindowsDevices | ForEach-Object { $aadDeviceIdToObjectIdHT[$_.azureADDeviceId] = GetAadObjectIdFromAadDeviceId -deviceId $_.azureADDeviceId }
 
 function GetDetectedAppsOnDevice {
     param (
@@ -224,7 +230,7 @@ function FindDevicesWithDetectedAppFromMonitor {
         $DevIds | ForEach-Object { $null = $deviceIds.Add($_) }
     }
 
-   return $deviceIds 
+    return $deviceIds 
 }
 
 function ResolveDevices {
@@ -325,7 +331,7 @@ function NewAddDeviceToGroupRequestObject {
     return $obj 
 }
 
-function CreateGroup {
+function CreateAssignedGroup {
     param (
         $GroupName
     )
@@ -350,6 +356,45 @@ function CreateGroup {
     return $response
 }
 
+function CreateDynamicDeviceGroup {
+    param (
+        $GroupName,
+        $MembershipRule
+    )
+
+    $body = @{
+        displayName                   = $GroupName
+        mailEnabled                   = $false
+        securityEnabled               = $true
+        mailNickname                  = [guid]::NewGuid()
+        groupTypes                    = @("DynamicMembership")
+        membershipRule                = $MembershipRule
+        membershipRuleProcessingState = "On"
+    } | ConvertTo-Json
+
+    $response = Invoke-WebRequest -UseBasicParsing -Uri "https://graph.microsoft.com/beta/groups" `
+        -Method "POST" `
+        -WebSession $session `
+        -Headers $headers `
+        -ContentType "application/json" `
+        -Body $body
+
+    if ($response.StatusCode -eq 201) {
+        return $response.Content | ConvertFrom-Json
+    }
+    return $response
+}
+
+function CreateGroupTagDeviceGroup {
+    param (
+        $GroupTag
+    )
+    
+    CreateDynamicDeviceGroup `
+        -GroupName "AAD_GR_GSC_Intune_Autopilot_$GroupTag" `
+        -MembershipRule "(device.devicePhysicalIds -any (_ -startsWith `"[OrderID]:$GroupTag`"))"
+}
+
 function AddDevicesToGroup {
     param (
         [string]$GroupId,
@@ -370,7 +415,7 @@ function CreateGroupAndAddDevices {
         [string[]]$DeviceIds
     )
     
-    $result = CreateGroup -GroupName $GroupName
+    $result = CreateAssignedGroup -GroupName $GroupName
     $groupId = $result.id
 
     AddDevicesToGroup -GroupId $groupId -DeviceIds $DeviceIds
